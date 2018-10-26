@@ -17,4 +17,7 @@ Instrucciones y requisitos:
 + Al abrirlo no estará montado el codigo C++, para hacerlo ir a la opción superior izquierda,  "Archivo (file)" -> "Create visual studio project"
 
 
+** Queda terminantemente prohibido comercializar el código y resto del proyecto residido en este repositorio **
+
+
 
