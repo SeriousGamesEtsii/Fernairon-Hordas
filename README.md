@@ -1,12 +1,12 @@
 # Fernairon-Hordas
 
-Ver. 0.1:
-  - Jugable, pero extremadamente difícil.
-  - Sin recompensas y baja progresión.
-  - Sin posibilidad de recuperar al aliado.
-  - Sin recuperación de vida.
-  ...
-  - **Todo lo mencionado anteriormente y más será implementado en versiones futuras.**
+Ver. 0.1.5:
+ -Añadida animacion para recargar (tecla U)
+ -Mejorada la interaccion entre animaciones
+ -Implementado la munición (No añadido a la UI)
+ -Arreglado un bug del lanzagranadas
+ -Arreglado varios bug de las IA
+ 
 
 Instrucciones y requisitos:
 
