@@ -21,6 +21,9 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	UAnimMontage* ReloadAnim;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Companion")
 	int32 NumMaxCompanion;
 
@@ -33,7 +36,33 @@ protected:
 	void MoveRight(float value);
 
 	float SprintingSpeed;
+
+	/*Firing*/
+	UPROPERTY(Transient, Replicated)
+	bool bIsFiring;
+
+	bool bIsReloading;
+
+	void StopWeaponAnimation(UAnimMontage* Animation);
+
+	void StopSimulateReload();
+
+	float PlayWeaponAnimation(UAnimMontage* Animation, float InPlayRate = 1.f, FName StartSectionName = NAME_None);
+
+	FTimerHandle TimerHandle_ReloadWeapon;
+
+	FTimerHandle TimerHandle_StopReload;
+
+	void ReloadWeapon();
+
 public:
+
+	void StartReload();
+
+	bool CanReload();
+
+	UFUNCTION(BlueprintCallable, Category = Firing)
+	bool IsFiring() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Companion")
 	void SetCurrentCompanion(int32 NewCurrentCompanion);

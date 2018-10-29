@@ -9,6 +9,7 @@
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "AIController.h"
+#include "SCharacter.h"
 
 
 int32 DebugWeaponDrawing = 0;
@@ -37,6 +38,16 @@ ASWeapon::ASWeapon()
 	NetUpdateFrequency = 66.0f;
 	MinNetUpdateFrequency = 33.0f;
 
+	AmmoChargerSize = 40;
+
+	ActualAmmoInCharger = AmmoChargerSize;
+
+	TotalAmmo = 500;
+
+	Ammunition = TotalAmmo;
+
+	bCanReload = false;
+
 }
 
 
@@ -48,21 +59,50 @@ void ASWeapon::BeginPlay()
 }
 
 
+void ASWeapon::StartReload()
+{
+	int32 ClipDelta = FMath::Min(AmmoChargerSize - ActualAmmoInCharger, Ammunition - ActualAmmoInCharger);
+
+	if (ClipDelta > 0)
+	{
+		ActualAmmoInCharger += ClipDelta;
+	}
+	
+
+}
+
+int32 ASWeapon::GetAmmunition()
+{
+	return Ammunition;
+}
+
+int32 ASWeapon::GetActualAmmoInCharger()
+{
+	return ActualAmmoInCharger;
+}
+
 void ASWeapon::Fire()
 {
-	//Trace the world, from pawn eyes to crosshair location
+	ASCharacter* MyOwner = Cast<ASCharacter>(GetOwner());
+	bCanReload = true;
+
+	if (ActualAmmoInCharger <= 0)
+	{
+		StopFire();
+		MyOwner->StartReload();
+		return;
+	}
 
 	if (Role < ROLE_Authority)
 	{
 		ServerFire();
 	}
 
-
-	APawn* MyOwner = Cast<APawn>(GetOwner());
+	ActualAmmoInCharger = ActualAmmoInCharger - 1;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::FString("Actual ammo") + FString::SanitizeFloat(ActualAmmoInCharger));
 
 	if (MyOwner)
 	{
-
 		RecoilPitch = FMath::FRandRange(-0.28f, 0.0f);
 		RecoilYaw = FMath::FRandRange(-0.25f, 0.25f);
 
@@ -89,6 +129,7 @@ void ASWeapon::Fire()
 
 		EPhysicalSurface SurfaceType = SurfaceType_Default;
 
+		//Trace the world, from pawn eyes to crosshair location
 		FHitResult Hit;
 		if (GetWorld()->LineTraceSingleByChannel(Hit, EyeLocation, TraceEnd, COLLISION_WEAPON, QueryParams))
 		{
@@ -175,6 +216,12 @@ bool ASWeapon::ServerFire_Validate()
 
 void ASWeapon::StartFire()
 {
+	if (ActualAmmoInCharger <= 0)
+	{
+
+		return;
+	}
+
 	float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
 
 	GetWorldTimerManager().SetTimer(TimerHandle_TimeBetweenShots, this, &ASWeapon::Fire, TimeBetweenShots, true, FirstDelay);

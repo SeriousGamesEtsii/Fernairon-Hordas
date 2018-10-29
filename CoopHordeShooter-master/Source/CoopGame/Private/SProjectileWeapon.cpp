@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SProjectileWeapon.h"
-
+#include "Kismet/GameplayStatics.h"
 
 
 
@@ -23,7 +23,5 @@ void ASProjectileWeapon::Fire()
 
 		//Spawneamos el proyectil al disparar
 		GetWorld()->SpawnActor<AActor>(ProjectileClass, MuzzleLocation, EyeRotation, SpawnParams);
-
-
 	}
 }

@@ -43,18 +43,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon, meta = (ClampMin = 0.0f))
 	float BulletSpread;
 
+	//Animaciones
 	void PlayFireEffect(FVector TracerEnd);
 
 	void PlayImpactEffects(EPhysicalSurface SurfaceType, FVector ImpactPoint);
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
-	TSubclassOf<UDamageType> DamageType;
-
-	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
-	FName MuzzleSocketName;
-
-	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
-	FName TracerTargetName;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	class UParticleSystem* MuzzleEffect;
@@ -68,20 +61,35 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	class UParticleSystem* TracerEffect;
 
+	//Daño && Disparos
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	TSubclassOf<UDamageType> DamageType;
+
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	FName MuzzleSocketName;
+
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	FName TracerTargetName;
+
 	UPROPERTY(EditDefaultsOnly, Category = Weapon)
 	TSubclassOf<UCameraShake> FireCamShake;
 
-	UPROPERTY(EditAnywhere, Category = Weapon)
+	UPROPERTY(EditDefaultsOnly, Category = Weapon)
 	float BaseDamage;
 
-	virtual void Fire();
+	int32 Ammunition;
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerFire();
+	int32 ActualAmmoInCharger;
 
-	FTimerHandle TimerHandle_TimeBetweenShots;
+	int32 TotalAmmo;
+
+	int32 AmmoChargerSize;
+
+	bool bCanReload;
 
 	float LastFireTime;
+
+	virtual void Fire();
 
 	//RPM - Bullets per minute fired
 	UPROPERTY(EditDefaultsOnly, Category = Weapon)
@@ -94,13 +102,31 @@ protected:
 
 	float RecoilPitch;
 
+	FTimerHandle TimerHandle_TimeBetweenShots;
+
+	//Multiplayer
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerFire();
+
 	UPROPERTY(ReplicatedUsing=OnRep_HitScanTrace)
 	FHitScanTrace HitScanTrace;
 
 	UFUNCTION()
 	void OnRep_HitScanTrace();
 
+
+	
+
 public:
+
+	//Disparos
+
+	void StartReload();
+
+
+	int32 GetAmmunition();
+
+	int32 GetActualAmmoInCharger();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Weapon")
 	float GetBaseDamage();
@@ -108,10 +134,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	void SetBaseDamage(float NewBaseDamage);
 
-	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	
 	virtual void StartFire();
 
-	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	
 	void StopFire();
 
 };

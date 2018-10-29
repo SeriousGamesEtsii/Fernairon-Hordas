@@ -48,6 +48,7 @@ ASCharacter::ASCharacter(const class FObjectInitializer& ObjectInitializer)
 	ZoomedFOV = 65.0f;
 	ZoomInterpSpeed = 20.0f;
 	bDied = false;
+	bIsFiring = false;
 
 	NumMaxCompanion = 1;
 	CurrentCompanion = 0;
@@ -82,8 +83,6 @@ void ASCharacter::BeginPlay()
 
 		}
 	}
-
-
 }
 
 void ASCharacter::MoveForward(float value)
@@ -95,6 +94,97 @@ void ASCharacter::MoveForward(float value)
 void ASCharacter::MoveRight(float value)
 {
 	AddMovementInput(GetActorRightVector() * value);
+}
+
+float ASCharacter::PlayWeaponAnimation(UAnimMontage* Animation, float InPlayRate, FName StartSectionName)
+{
+	float Duration = 0.0f;
+	
+	if (Animation)
+	{
+		Duration = PlayAnimMontage(Animation, InPlayRate, StartSectionName);
+	}
+	
+
+	return Duration;
+}
+
+void ASCharacter::StopWeaponAnimation(UAnimMontage* Animation)
+{
+	if (CurrentWeapon)
+	{
+		if (Animation)
+		{
+			this->StopAnimMontage(Animation);
+		}
+	}
+}
+
+void ASCharacter::StartReload()
+{
+	/*if (Role < ROLE_Authority)
+	{
+		ServerStartReload();
+	}*/
+	if (CurrentWeapon && !bIsReloading)
+	{
+		if (CanReload())
+		{
+			bIsReloading = true;
+			StopFire();
+			float AnimDuration = PlayWeaponAnimation(ReloadAnim);
+			if (AnimDuration <= 0.0f)
+			{
+				AnimDuration = 0;
+			}
+
+			GetWorldTimerManager().SetTimer(TimerHandle_StopReload, this, &ASCharacter::StopSimulateReload, AnimDuration, false);
+			if (Role == ROLE_Authority)
+			{
+				GetWorldTimerManager().SetTimer(TimerHandle_ReloadWeapon, this, &ASCharacter::ReloadWeapon, FMath::Max(0.1f, AnimDuration - 0.1f), false);
+			}
+			/*if (This->IsLocallyControlled())
+			{
+				PlayWeaponSound(ReloadSound);
+			}*/
+		}
+	}
+}
+
+void ASCharacter::StopSimulateReload()
+{
+	if (CurrentWeapon)
+	{
+		bIsReloading = false;
+		StopWeaponAnimation(ReloadAnim);
+		APlayerController* PC = Cast<APlayerController>(GetController());
+
+		FKey Key = EKeys::LeftMouseButton;
+
+		if (PC->IsInputKeyDown(Key))
+		{
+			StartFire();
+		}
+	}
+}
+
+void ASCharacter::ReloadWeapon()
+{
+	if(CurrentWeapon)
+	{
+		CurrentWeapon->StartReload();
+	}
+
+}
+
+bool ASCharacter::CanReload()
+{
+	return !bDied;
+}
+
+bool ASCharacter::IsFiring() const
+{
+	return bIsFiring;
 }
 
 void ASCharacter::SetCurrentCompanion(int32 NewCurrentCompanion)
@@ -175,18 +265,19 @@ void ASCharacter::EndZoom()
 
 void ASCharacter::StartFire()
 {
-	if (CurrentWeapon)
+	if (CurrentWeapon && !bIsReloading)
 	{
-		CurrentWeapon->StartFire();
+		bIsFiring = true;
+		CurrentWeapon->StartFire();		
 	}
 }
 
 void ASCharacter::StopFire()
 {
-
 	if (CurrentWeapon)
 	{
-		CurrentWeapon->StopFire();
+		bIsFiring = false;
+		CurrentWeapon->StopFire();		
 	}
 
 }
@@ -243,8 +334,8 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ASCharacter::StartFire);
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ASCharacter::StopFire);
 
+	PlayerInputComponent->BindAction("Recharge", IE_Pressed, this, &ASCharacter::StartReload);
 
-	//Challenge code
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 }
 
@@ -264,7 +355,9 @@ void ASCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(ASCharacter, bIsTargeting, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(ASCharacter, bIsFiring, COND_SkipOwner);
 	DOREPLIFETIME(ASCharacter, CurrentWeapon);
 	DOREPLIFETIME(ASCharacter, bDied);
+
 
 }
