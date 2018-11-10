@@ -7,11 +7,15 @@
 #include "GameFramework/PawnMovementComponent.h"
 #include "SWeapon.h"
 #include "CoopGame.h"
+#include "DrawDebugHelpers.h"
 #include "SHealthComponent.h"
+#include "SActorWidgetComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "SCharacterMovementComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "SUsableActor.h"
+#include "AIController.h"
 
 
 // Sets default values
@@ -32,10 +36,12 @@ ASCharacter::ASCharacter(const class FObjectInitializer& ObjectInitializer)
 
 	HealthComp = CreateDefaultSubobject<USHealthComponent>(TEXT("HealthComponent"));
 
+	WidgetComp = CreateDefaultSubobject<USActorWidgetComponent>(TEXT("WidgetComponent"));
+
 	SpringArmComp = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArmComp"));
 	SpringArmComp->SetupAttachment(RootComponent);
 	SpringArmComp->bUsePawnControlRotation = true;
-
+	WidgetComp->SetupAttachment(SpringArmComp);
 	MoveComp->GetNavAgentPropertiesRef().bCanCrouch = true;
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(COLLISION_WEAPON, ECR_Ignore);
@@ -49,6 +55,9 @@ ASCharacter::ASCharacter(const class FObjectInitializer& ObjectInitializer)
 	ZoomInterpSpeed = 20.0f;
 	bDied = false;
 	bIsFiring = false;
+
+	MaxUseDistance = 550;
+	bHasNewFocus = true;
 
 	NumMaxCompanion = 1;
 	CurrentCompanion = 0;
@@ -78,11 +87,54 @@ void ASCharacter::BeginPlay()
 		{
 
 			CurrentWeapon->SetOwner(this);
+			SelectSocketWeapon();
 			CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponAttachSocket);
-
-
 		}
 	}
+}
+
+// Called every frame
+void ASCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	CurrentWeapon->bIsEquiped = bIsReloading;
+
+	float TargetFOV = bWantsToZoom ? ZoomedFOV : DefaultFOV;
+
+	float NewFOV = FMath::FInterpTo(CameraComp->FieldOfView, TargetFOV, DeltaTime, ZoomInterpSpeed);
+
+	CameraComp->SetFieldOfView(NewFOV);
+
+	if ((Controller && Controller->IsLocalController()))
+	{
+		ASUsableActor* Usable = GetUsableInView();
+
+		//Termina el foco
+		if (FocusedUsableActor != Usable)
+		{
+			if (FocusedUsableActor)
+			{
+				FocusedUsableActor->EndFocusItem();
+			}
+
+			bHasNewFocus = true;
+		}
+
+		FocusedUsableActor = Usable;
+
+		//Empieza el foco
+
+		if (Usable)
+		{
+			if (bHasNewFocus)
+			{
+				Usable->StartFocusItem();
+				bHasNewFocus = false;
+			}
+		}
+	}
+
 }
 
 void ASCharacter::MoveForward(float value)
@@ -126,7 +178,7 @@ void ASCharacter::StartReload()
 	{
 		ServerStartReload();
 	}*/
-	if (CurrentWeapon && !bIsReloading)
+	if (CurrentWeapon && CurrentWeapon->ActualAmmoInCharger < CurrentWeapon->AmmoChargerSize && !bIsReloading)
 	{
 		if (CanReload())
 		{
@@ -141,6 +193,7 @@ void ASCharacter::StartReload()
 			GetWorldTimerManager().SetTimer(TimerHandle_StopReload, this, &ASCharacter::StopSimulateReload, AnimDuration, false);
 			if (Role == ROLE_Authority)
 			{
+				CurrentWeapon->SpawnClip();
 				GetWorldTimerManager().SetTimer(TimerHandle_ReloadWeapon, this, &ASCharacter::ReloadWeapon, FMath::Max(0.1f, AnimDuration - 0.1f), false);
 			}
 			/*if (This->IsLocallyControlled())
@@ -157,13 +210,15 @@ void ASCharacter::StopSimulateReload()
 	{
 		bIsReloading = false;
 		StopWeaponAnimation(ReloadAnim);
-		APlayerController* PC = Cast<APlayerController>(GetController());
-
-		FKey Key = EKeys::LeftMouseButton;
-
-		if (PC->IsInputKeyDown(Key))
+		APlayerController* PC =	Cast<APlayerController>(GetController());
+		if (PC)
 		{
-			StartFire();
+			FKey Key = EKeys::LeftMouseButton;
+
+			if (PC->IsInputKeyDown(Key))
+			{
+				StartFire();
+			}
 		}
 	}
 }
@@ -177,9 +232,39 @@ void ASCharacter::ReloadWeapon()
 
 }
 
+void ASCharacter::SelectSocketWeapon()
+{
+	if (CurrentWeapon)
+	{
+		if (CurrentWeapon->WeaponType == 0)
+		{
+			WeaponAttachSocket = "WeaponSocket";
+		}
+		if (CurrentWeapon->WeaponType == 1)
+		{
+			WeaponAttachSocket = "WeaponSocketAk47";
+		}
+		if (CurrentWeapon->WeaponType == 2)
+		{
+			WeaponAttachSocket = "WeaponSocket";
+		}
+		if (CurrentWeapon->WeaponType == 3)
+		{
+			WeaponAttachSocket = "WeaponSocket";
+		}
+
+	}
+}
+
+
 bool ASCharacter::CanReload()
 {
 	return !bDied;
+}
+
+ASWeapon* ASCharacter::GetCurrentWeapon() const
+{
+	return CurrentWeapon;
 }
 
 bool ASCharacter::IsFiring() const
@@ -229,6 +314,50 @@ FRotator ASCharacter::GetAimOffsets() const
 	const FRotator AimRotLS = AimDirLS.Rotation();
 
 	return AimRotLS;
+}
+
+ASUsableActor * ASCharacter::GetUsableInView()
+{
+	FVector CamLoc;
+	FRotator CamRot;
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC == NULL)
+	{
+		return NULL;
+	}
+	if (PC)
+	{
+		PC->GetActorEyesViewPoint(CamLoc, CamRot);
+	}
+	const FVector StartTrace = CamLoc;
+	const FVector Direction = CamRot.Vector();
+	const FVector EndTrace = StartTrace + (Direction * MaxUseDistance);
+
+	FCollisionQueryParams TraceParams(FName(TEXT("")), true, this);
+	TraceParams.bTraceAsyncScene = true;
+	TraceParams.bReturnPhysicalMaterial = false;
+	TraceParams.bTraceComplex = true;
+
+	FHitResult Hit(ForceInit);
+	GetWorld()->LineTraceSingleByChannel(Hit, StartTrace, EndTrace, COLLISION_PROJECTILE, TraceParams);
+
+	//DrawDebugLine(GetWorld(), StartTrace, EndTrace, FColor(255, 255, 255), false, 1);
+
+	return Cast<ASUsableActor>(Hit.GetActor());
+}
+
+void ASCharacter::Use_Implementation()
+{
+	ASUsableActor* Usable = GetUsableInView();
+	if (Usable)
+	{
+		Usable->OnUsed(this);
+	}
+}
+
+bool ASCharacter::Use_Validate()
+{
+	return true;
 }
 
 void ASCharacter::SetTargeting(bool NewTargeting)
@@ -301,19 +430,6 @@ void ASCharacter::OnHealthChanged(USHealthComponent* OwningHealthComp, float Hea
 	}
 }
 
-// Called every frame
-void ASCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-	float TargetFOV = bWantsToZoom ? ZoomedFOV : DefaultFOV;
-
-	float NewFOV = FMath::FInterpTo(CameraComp->FieldOfView, TargetFOV, DeltaTime, ZoomInterpSpeed);
-
-	CameraComp->SetFieldOfView(NewFOV);
-
-}
-
 // Called to bind functionality to input
 void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -335,6 +451,8 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ASCharacter::StopFire);
 
 	PlayerInputComponent->BindAction("Recharge", IE_Pressed, this, &ASCharacter::StartReload);
+
+	PlayerInputComponent->BindAction("Use", IE_Pressed, this, &ASCharacter::Use);
 
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 }

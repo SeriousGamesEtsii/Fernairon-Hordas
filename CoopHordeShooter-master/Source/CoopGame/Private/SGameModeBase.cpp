@@ -18,6 +18,8 @@ ASGameModeBase::ASGameModeBase()
 
 	GameStateClass = ASGameState::StaticClass();
 
+	
+
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickInterval = 1.0F;
 

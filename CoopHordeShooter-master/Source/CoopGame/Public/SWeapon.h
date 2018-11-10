@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SUsableActor.h"
 #include "SWeapon.generated.h"
 
 //Contains information of a single hitscan weapon linetrace
@@ -18,13 +19,12 @@ public:
 	UPROPERTY()
 	TEnumAsByte<EPhysicalSurface> SurfaceType;
 
-
 	UPROPERTY()
 	FVector_NetQuantize TraceTo;
 };
 
 UCLASS()
-class COOPGAME_API ASWeapon : public AActor
+class COOPGAME_API ASWeapon : public ASUsableActor
 {
 	GENERATED_BODY()
 
@@ -37,7 +37,13 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class USActorWidgetComponent* ActorWidgetComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class USkeletalMeshComponent* MeshComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class UCapsuleComponent* CapComp;
 
 	//Dispersión de balas en grados
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon, meta = (ClampMin = 0.0f))
@@ -68,22 +74,33 @@ protected:
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	FName MuzzleSocketName;
 
+	/*Eyección de balas al disparar*/
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	FName ShellEjectSocketName;
+
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	FName ClipSocketName;
+
+	UPROPERTY(BlueprintReadOnly, EditDefaultsOnly, Category = "ShellEject")
+	TSubclassOf<AActor> BulletClass;
+
+	UPROPERTY(BlueprintReadOnly, EditDefaultsOnly, Category = "ClipEject")
+	TSubclassOf<AActor> ClipClass;
+
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	FName TracerTargetName;
 
 	UPROPERTY(EditDefaultsOnly, Category = Weapon)
 	TSubclassOf<UCameraShake> FireCamShake;
 
-	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = Weapon)
 	float BaseDamage;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	int32 Ammunition;
 
-	int32 ActualAmmoInCharger;
-
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	int32 TotalAmmo;
-
-	int32 AmmoChargerSize;
 
 	bool bCanReload;
 
@@ -92,15 +109,30 @@ protected:
 	virtual void Fire();
 
 	//RPM - Bullets per minute fired
-	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
 	float RateOfFire;
 
 	//Derived from rate of fire
 	float TimeBetweenShots;
 
-	float RecoilYaw;
+	/*Ranges*/
+	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	float MaxRangeYaw;
 
+	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	float MinRangeYaw;
+
+	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	float MaxRangePitch;
+
+	UPROPERTY(EditDefaultsOnly, Category = Weapon)
+	float MinRangePitch;
+
+	float RecoilYaw;
+	
 	float RecoilPitch;
+
+	//Timer
 
 	FTimerHandle TimerHandle_TimeBetweenShots;
 
@@ -119,25 +151,20 @@ protected:
 
 public:
 
+	void SpawnClip();
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	int32 WeaponType;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	int32 ActualAmmoInCharger;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Weapon)
+	int32 AmmoChargerSize;
+
 	//Disparos
-
 	void StartReload();
-
-
-	int32 GetAmmunition();
-
-	int32 GetActualAmmoInCharger();
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Weapon")
-	float GetBaseDamage();
-
-	UFUNCTION(BlueprintCallable, Category = "Weapon")
-	void SetBaseDamage(float NewBaseDamage);
-
-	
 	virtual void StartFire();
-
-	
 	void StopFire();
 
 };

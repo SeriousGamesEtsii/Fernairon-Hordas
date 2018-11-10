@@ -55,11 +55,17 @@ protected:
 
 	void ReloadWeapon();
 
+	void SelectSocketWeapon();
+
 public:
 
+	UFUNCTION(BlueprintCallable, Category = Firing)
 	void StartReload();
 
 	bool CanReload();
+
+	UFUNCTION(BlueprintCallable, Category = Firing)
+	ASWeapon* GetCurrentWeapon() const;
 
 	UFUNCTION(BlueprintCallable, Category = Firing)
 	bool IsFiring() const;
@@ -102,9 +108,30 @@ public:
 
 
 
-	/*Components*/
+	
 
 protected:
+
+	/*UsableActorsSupport*/
+
+	class ASUsableActor* GetUsableInView();
+
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = Player)
+	float MaxUseDistance;
+
+	UPROPERTY(BlueprintReadOnly, Category = Player)
+	bool bHasNewFocus;
+
+	ASUsableActor* FocusedUsableActor;
+
+public:
+
+	UFUNCTION(BlueprintCallable, WithValidation, Server, Reliable, Category = PlayerAbility)
+	virtual void Use();
+
+protected:
+
+	/*Components*/
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components)
 	class UCameraComponent* CameraComp;
@@ -114,6 +141,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components)
 	class USHealthComponent* HealthComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components)
+	class USActorWidgetComponent* WidgetComp;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player")
 	bool bWantsToZoom;
@@ -131,9 +161,9 @@ protected:
 	class ASWeapon* CurrentWeapon;
 
 	UPROPERTY(VisibleDefaultsOnly, Category = "Player")
-	FName WeaponAttachSocket = "WeaponSocket";
+	FName WeaponAttachSocket;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Player")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Player")
 	TSubclassOf<ASWeapon> StarterWeaponClass;
 
 	UFUNCTION()

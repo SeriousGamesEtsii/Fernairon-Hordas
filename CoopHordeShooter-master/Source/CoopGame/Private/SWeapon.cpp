@@ -1,11 +1,13 @@
 #include "SWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "CoopGame.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
+#include "SActorWidgetComponent.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "AIController.h"
@@ -21,11 +23,22 @@ ASWeapon::ASWeapon()
 {
 
 	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
+	ActorWidgetComp = CreateDefaultSubobject<USActorWidgetComponent>(TEXT("WidgetActorComp"));
+	CapComp = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComp"));
 	RootComponent = MeshComp;
+	ActorWidgetComp->SetupAttachment(RootComponent);
+	CapComp->SetupAttachment(RootComponent);
+	CapComp->SetRelativeRotation(FRotator(0, 0, 90));
 
 	MuzzleSocketName = "MuzzleSocket";
 
+	ShellEjectSocketName = "ShellEjectionSocket";
+
+	ClipSocketName = "ClipSocket";
+
 	TracerTargetName = "Target";
+
+	WeaponType = 0;
 
 	BaseDamage = 20.0f;
 
@@ -48,43 +61,65 @@ ASWeapon::ASWeapon()
 
 	bCanReload = false;
 
+	MaxRangeYaw = 0.0;
+	MinRangeYaw = -0.28;
+
+	MaxRangePitch = 0.25f;
+	MinRangePitch = -0.25f;
+
+	bIsEquiped = false;
 }
 
 
 void ASWeapon::BeginPlay()
 {
 	Super::BeginPlay();
-
 	TimeBetweenShots = 60 / RateOfFire;
 }
 
 
 void ASWeapon::StartReload()
 {
+	if (ActualAmmoInCharger >= 40)
+	{
+		return;
+	}
 	int32 ClipDelta = FMath::Min(AmmoChargerSize - ActualAmmoInCharger, Ammunition - ActualAmmoInCharger);
 
 	if (ClipDelta > 0)
 	{
 		ActualAmmoInCharger += ClipDelta;
+		Ammunition = Ammunition - ClipDelta;
 	}
-	
+
+	//SpawnClip();
 
 }
 
-int32 ASWeapon::GetAmmunition()
-{
-	return Ammunition;
-}
 
-int32 ASWeapon::GetActualAmmoInCharger()
+void ASWeapon::SpawnClip()
 {
-	return ActualAmmoInCharger;
+
+	FVector EyeLocation;
+	FRotator EyeRotation;
+
+	ASCharacter* MyOwner = Cast<ASCharacter>(GetOwner());
+
+	MyOwner->GetActorEyesViewPoint(EyeLocation, EyeRotation);
+
+	//Spawnea el cargador 
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	FVector ClipEjectLocation = MeshComp->GetSocketLocation(ClipSocketName);
+	//Spawneamos el clip al recargar
+	GetWorld()->SpawnActor<AActor>(ClipClass, ClipEjectLocation, EyeRotation, SpawnParams);
 }
 
 void ASWeapon::Fire()
 {
-	ASCharacter* MyOwner = Cast<ASCharacter>(GetOwner());
 	bCanReload = true;
+
+	ASCharacter* MyOwner = Cast<ASCharacter>(GetOwner());
 
 	if (ActualAmmoInCharger <= 0)
 	{
@@ -99,24 +134,23 @@ void ASWeapon::Fire()
 	}
 
 	ActualAmmoInCharger = ActualAmmoInCharger - 1;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::FString("Actual ammo") + FString::SanitizeFloat(ActualAmmoInCharger));
+	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::FString("Actual ammo") + FString::SanitizeFloat(ActualAmmoInCharger));
 
 	if (MyOwner)
 	{
-		RecoilPitch = FMath::FRandRange(-0.28f, 0.0f);
-		RecoilYaw = FMath::FRandRange(-0.25f, 0.25f);
+		RecoilPitch = FMath::FRandRange(MinRangePitch, MaxRangePitch);
+		RecoilYaw = FMath::FRandRange(MinRangeYaw, MaxRangeYaw);
 
 		FVector EyeLocation;
 		FRotator EyeRotation;
 		MyOwner->GetActorEyesViewPoint(EyeLocation, EyeRotation);
 
 		FVector ShotDirection = EyeRotation.Vector();
-
-		FVector TraceEnd = EyeLocation + (ShotDirection * 10000);
-		
 		float HalfRad = FMath::DegreesToRadians(BulletSpread);
 		ShotDirection = FMath::VRandCone(ShotDirection, HalfRad, HalfRad);
 
+
+		FVector TraceEnd = EyeLocation + (ShotDirection * 10000);
 
 		FCollisionQueryParams QueryParams;
 		QueryParams.AddIgnoredActor(MyOwner);
@@ -171,13 +205,24 @@ void ASWeapon::Fire()
 
 		LastFireTime = GetWorld()->TimeSeconds;
 
-		APlayerController* PC = Cast<APlayerController>(MyOwner->GetController());
+		if (BulletClass)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			FVector ShellEjectLocation = MeshComp->GetSocketLocation(ShellEjectSocketName);
+			FRotator BulletRotator = EyeRotation.Add(0, -90, 0);
+			//Spawneamos el proyectil al disparar
+			GetWorld()->SpawnActor<AActor>(BulletClass, ShellEjectLocation, BulletRotator, SpawnParams);
 
+			
+		}
+
+		APlayerController* PC = Cast<APlayerController>(MyOwner->GetController());
 		if (PC)
 		{
 			PC->AddPitchInput(RecoilPitch);
 			PC->AddYawInput(RecoilYaw);
-		}	
+		}
 
 	}
 
@@ -193,15 +238,6 @@ void ASWeapon::OnRep_HitScanTrace()
 	PlayImpactEffects(HitScanTrace.SurfaceType, HitScanTrace.TraceTo);
 }
 
-float ASWeapon::GetBaseDamage()
-{
-	return BaseDamage;
-}
-
-void ASWeapon::SetBaseDamage(float NewBaseDamage)
-{
-	BaseDamage = NewBaseDamage;
-}
 
 
 void ASWeapon::ServerFire_Implementation()
@@ -251,7 +287,7 @@ void ASWeapon::PlayFireEffect(FVector TracerEnd)
 
 	}
 
-	APawn* MyOwner = Cast<APawn>(GetOwner());
+	ASCharacter* MyOwner = Cast<ASCharacter>(GetOwner());
 
 	if (MyOwner)
 	{
